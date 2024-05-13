@@ -67,6 +67,7 @@ public class UserService {
         user.setHashedPassword(bCryptPasswordEncoder.encode(password));
         return userRepository.save(user);
 
+
     }
 
     public boolean logout(String tokenValue) throws TokenNotFoundException {

@@ -1,5 +1,8 @@
 package org.example.userservice.controllers;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.userservice.dtos.LoginRequestDto;
+import org.example.userservice.dtos.SendEmailEventDto;
 import org.example.userservice.dtos.SignUpRequestDto;
 import org.example.userservice.dtos.UserDto;
 import org.example.userservice.exception.IncorrectPasswordException;
@@ -11,6 +14,7 @@ import org.example.userservice.model.User;
 import org.example.userservice.service.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
@@ -19,8 +23,12 @@ import java.util.Optional;
 @RequestMapping("/users")
 public class UserController {
     private final UserService userService;
-    public UserController(UserService userService){
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ObjectMapper objectMapper;
+    public UserController(UserService userService, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper){
         this.userService = userService;
+        this.kafkaTemplate = kafkaTemplate;
+        this.objectMapper = objectMapper;
     }
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody LoginRequestDto loginRequestDto) throws UserNotFoundException, IncorrectPasswordException {
@@ -30,11 +38,20 @@ public class UserController {
     }
 
     @PostMapping("/signup")
-    public ResponseEntity<String> signUp(@RequestBody SignUpRequestDto signUpRequestDto) throws MailAlreadyExistException {
+    public ResponseEntity<String> signUp(@RequestBody SignUpRequestDto signUpRequestDto) throws MailAlreadyExistException, JsonProcessingException {
         User user = userService.signUp(signUpRequestDto.getName(), signUpRequestDto.getEmail(),
                                         signUpRequestDto.getPassword());
         if(user==null){return new ResponseEntity<>("Signup Unsuccessful", HttpStatus.NOT_ACCEPTABLE);}
-        else{return new ResponseEntity<>("Signup successful", HttpStatus.OK);}
+        else{
+            SendEmailEventDto sendEmailEventDto = new SendEmailEventDto();
+            sendEmailEventDto.setTo(signUpRequestDto.getEmail());
+            sendEmailEventDto.setFrom("sagarbvmdelhi@gmail.com");
+            sendEmailEventDto.setSubject("Welcome to UserProductNexus");
+            sendEmailEventDto.setBody("Welcome to UserProductNexus. Your account has been created successfully.");
+
+            kafkaTemplate.send("sendEmail", objectMapper.writeValueAsString(sendEmailEventDto));
+            return new ResponseEntity<>("Signup successful", HttpStatus.OK);}
+
 
     }
 
